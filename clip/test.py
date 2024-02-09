@@ -1,11 +1,19 @@
 import requests
+import os
+import dotenv
 
-url = "https://risenfromashes--clip-square-dev.modal.run"
+dotenv.load_dotenv()
 
-# data = {"url": "https://images.pixelshare.site/mega.png"}
-data = {"text": "A very beautiful girl"}
+url = os.environ["API_URL"]
 
-response = requests.post(url, json=data)
+data = {
+    "texts": ["Photo of a rose"],
+    "images": ["https://images.pixelshare.site/Rosa_Precious_platinum.jpg"],
+}
+
+response = requests.post(
+    url, json=data, headers={"Authorization": "Bearer " + os.environ["AUTH_TOKEN"]}
+)
 
 if response.status_code == 200:
     print("Success!")

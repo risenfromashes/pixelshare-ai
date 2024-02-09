@@ -1,5 +1,8 @@
-from modal import Stub, build, enter, method, Image, web_endpoint
+import os
+from modal import Secret, Stub, build, enter, method, Image, web_endpoint
 from typing import Dict
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 image = Image.from_registry(
     "nvidia/cuda:12.3.1-base-ubuntu22.04", add_python="3.11"
@@ -37,7 +40,7 @@ class Clip:
 
         with torch.no_grad(), torch.cuda.amp.autocast():
             text = self.tokenizer(text)
-            text_features = self.model.encode_text(text)
+            text_features = self.model.encode_text(text)[0]
             text_features /= text_features.norm(dim=-1, keepdim=True)
             text_features = text_features.tolist()
 
@@ -61,11 +64,26 @@ class Clip:
             return image_features
 
 
-@stub.function()
+auth_scheme = HTTPBearer()
+
+
+@stub.function(secrets=[Secret.from_name("web-auth-token")])
 @web_endpoint(method="POST")
-def square(data: Dict):
-    if data.get("url") is not None:
-        return {"embedding": Clip().embed_image.remote(data["url"])}
-    elif data.get("text") is not None:
-        return {"embedding": Clip().embed_text.remote(data["text"])}
-    return {"error": "invalid request"}
+def encode(data: Dict, token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
+    if token.credentials != os.environ["AUTH_TOKEN"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    images = []
+    texts = []
+    if data.get("images") is not None:
+        for url in data["images"]:
+            images.append({"url": url, "embedding": Clip().embed_image.remote(url)})
+    if data.get("texts") is not None:
+        for text in data["texts"]:
+            texts.append({"text": text, "embedding": Clip().embed_text.remote(text)})
+
+    return {"images": images, "texts": texts}
