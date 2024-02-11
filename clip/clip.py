@@ -19,7 +19,7 @@ stub = Stub("clip")
 
 @stub.cls(
     timeout=60 * 5,
-    container_idle_timeout=60,
+    container_idle_timeout=60 * 10,
     image=image,
 )
 class Clip:
